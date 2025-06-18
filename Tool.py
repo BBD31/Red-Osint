@@ -25,7 +25,7 @@ def get_geo_by_ip(ip):
 async def main(username):
     user = await client.get_entity(username)
     full = await client(GetFullUserRequest(user.id))
-    bio = full.about or ""
+    bio = full.full_user.about or ""
 
     print(f"[~] Username: {user.username}")
     print(f"[~] ID: {user.id}")
