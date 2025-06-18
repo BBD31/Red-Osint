@@ -1,43 +1,46 @@
+from telethon import TelegramClient
 import requests
-from bs4 import BeautifulSoup
 import re
+from telethon.tl.functions.users import GetFullUserRequest
 
-def parse_geo_and_id(username):
-    if username.startswith("@"):
-        username = username[1:]
+api_id = 26571005  
+api_hash = '5257cad47d1fffb8b97e57f15f0683ae'  
 
-    url = f"https://t.me/{username}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+client = TelegramClient('session', api_id, api_hash)
+
+def extract_ip(text):
+    ip_pattern = r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
+    match = re.search(ip_pattern, text)
+    return match.group(0) if match else None
+
+def get_geo_by_ip(ip):
     try:
-        response = requests.get(url, headers=headers)
-        soup = BeautifulSoup(response.text, "html.parser")
+        data = requests.get(f"http://ip-api.com/json/{ip}").json()
+        if data['status'] == 'success':
+            return data.get('city', 'Unknown'), data.get('country', 'Unknown')
+    except:
+        pass
+    return None, None
 
-        # Try to find user ID (if available in the page)
-        user_id = None
-        user_id_tag = soup.find(attrs={"data-user-id": True})
-        if user_id_tag:
-            user_id = user_id_tag["data-user-id"]
+async def main(username):
+    user = await client.get_entity(username)
+    full = await client(GetFullUserRequest(user.id))
+    bio = full.about or ""
 
-        # Get profile description
-        desc_tag = soup.find("div", class_="tgme_page_description")
-        description = desc_tag.text.strip() if desc_tag else ""
+    print(f"[~] Username: {user.username}")
+    print(f"[~] ID: {user.id}")
+    print(f"[~] Bio: {bio}")
 
-        # Try to find city and country in description, e.g. "Kyiv, Ukraine"
-        city, country = None, None
-        match = re.search(r"([A-ZА-Я][a-zа-я]+),\s*([A-ZА-Я][a-zа-я]+)", description)
-        if match:
-            city = match.group(1)
-            country = match.group(2)
-
-        print(f"[~] Username: {username}")
-        print(f"[~] User ID: {user_id if user_id else 'Not available'}")
-        print(f"[~] Description: {description if description else 'None'}")
-        print(f"[~] City: {city if city else 'Not found in description'}")
-        print(f"[~] Country: {country if country else 'Not found in description'}")
-
-    except Exception as e:
-        print(f"[~] Error: {e}")
+    ip = extract_ip(bio)
+    if ip:
+        city, country = get_geo_by_ip(ip)
+        print(f"[~] IP detected: {ip}")
+        print(f"[~] Geo by IP: {city}, {country}")
+    else:
+        print("[~] No IP found in bio")
 
 if __name__ == "__main__":
-    user = input("[#] Enter Telegram username (without @): ")
-    parse_geo_and_id(user)
+    import asyncio
+    username = input("[#] Enter Telegram username (without @): ")
+    with client:
+        client.loop.run_until_complete(main(username))
